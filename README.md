@@ -15,3 +15,10 @@ In the context of robotic grasping, object segmentation encounters several diffi
 
 # Results
 <img width="529" alt="image" src="https://user-images.githubusercontent.com/43345233/226508618-c3cba303-d432-4262-9573-ec7e2da534fe.png">
+
+# Requirements:
+ Python 3.7 
+ Pytorch 1.0.1.post2
+ pytorch_geometric 1.1.2
+ 
+ Preparations:
