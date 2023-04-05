@@ -1,0 +1,115 @@
+from __future__ import print_function
+import subprocess
+import os
+import pdb
+import random
+from datetime import datetime
+curDT = datetime.now()
+date_time = curDT.strftime("%Y-%m-%d %H:%M")
+from utils.logger import GOATLogger
+from copy import deepcopy
+
+import cv2
+import numpy as np
+import open3d as o3d
+import pytorch_lightning as pl
+import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
+import torch.utils.data
+# import torch.nn.functional as F
+import torch.distributed as dist
+
+from .network.get_network import get_network
+from utils.common_util import AverageMeter, intersectionAndUnionGPU
+
+seed = 0
+pl.seed_everything(seed)
+np.random.seed(seed)
+random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+
+class GNN_Mixer(pl.LightningModule):
+    def __init__(self, args=None):
+        super().__init__()
+        
+        # ------------
+        # save_hyperparameters
+        # ------------
+        self.save_hyperparameters("args")
+        args = self.hparams['args']        
+        self.MYCHECKPOINT = deepcopy(args.MYCHECKPOINT)
+        self.voxel_size = deepcopy(args.voxel_size)
+        self.ignore_label = int(args.ignore_label) # 255
+        self.classes = int(args.classes)
+        self.print_freq = int(args.print_freq)
+        self.optim = deepcopy(args.optim)
+
+        self.train_batch = int(args.train_batch)
+        self.val_batch = int(args.val_batch)
+
+        self.distributed_backend = str(args.distributed_backend)
+
+        # ------------
+        # model
+        # ------------        
+        self.model = get_network(args)
+
+        # ------------
+        # metrics
+        # ------------
+        self.resetMetrics()
+
+        # ------------
+        # logger
+        # ------------
+        if not bool(args.off_text_logger): # FIXME. pytorch-lightning does not support text logger.
+            mode = 'train' if bool(args.on_train) else 'test'
+            self.text_logger = GOATLogger(
+                mode=mode, 
+                save_root=args.MYCHECKPOINT,
+                log_freq=0,
+                base_name=f'log_{mode}_{date_time}',
+                n_iterations=0,
+                n_eval_iterations=0)
+        else:
+            self.text_logger = None
+            
+                
+    def resetMetrics(self):
+        self.intersection_meter = AverageMeter()
+        self.union_meter = AverageMeter()
+        self.target_meter = AverageMeter()
+        self.nvox_meter = AverageMeter()
+
+    def forward(self, data_dict):
+        pred_dict = {}
+        loss_dict = {}
+
+        with torch.no_grad():
+            coord = data_dict['coord']
+            feat = data_dict['feat']
+            target = data_dict['target']
+            offset = data_dict['offset']
+        
+        output = self.model([coord, feat, offset])
+        pred_dict['output'] = output
+        if target.shape[-1] == 1:
+            target = target[:, 0]  # for cls
+        loss = nn.CrossEntropyLoss(ignore_index=self.ignore_label)(output, target)
+        loss_dict['loss'] = loss
+
+        return pred_dict, loss_dict
+    
+    @torch.no_grad()
+    def calcMetrics(self, batch_idx, outputs, data_dict, logName='train/accuracy'):
+        output = outputs['output'].detach()
+        coord = data_dict['coord']
+        target = data_dict['target']
+
+        output = output.max(1)[1]
+        n = coord.size(0)        
+        count = target.new_tensor([n], dtype=torch
