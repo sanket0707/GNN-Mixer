@@ -19,7 +19,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-##------------------t
+##------------------
 import torch
 from torch import nn
 import torch.nn as nn 
@@ -73,8 +73,8 @@ from sklearn.metrics import confusion_matrix
 torch.cuda.empty_cache()
 torch.backends.cudnn.benchmark=False # should use GPU or not
 
-#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#Function and classess
+
+###### Function and classess
 class FocalLoss(nn.Module):
     '''Multi-class Focal loss implementation'''
     def __init__(self, gamma=0.5, weight=None):
